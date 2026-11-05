@@ -29,10 +29,10 @@ input{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px}
 <div class="brand">LIQD LAB</div><div class="muted">CODE 128 BARCODE SALES SCANNER</div>
 <section class="panel">
 <h2>Barcode scanner</h2>
-<div class="muted">Code 128 is explicitly enabled, along with common retail barcode formats.</div>
+<div class="muted">Code 128 ONLY. Numeric EAN/UPC formats are disabled to prevent other numeric barcodes being selected.</div>
 <div id="scanner"></div>
 <div class="scan-help"><span class="scan-icon"></span><span>Place the complete barcode inside the scan frame. Hold steady until it reads.</span></div>
-<div id="status" class="status">Scanner loading…</div>
+<div id="status" class="status">Scanner loading…</div><div id="decoded" class="status hidden"><b>Decoded Code 128:</b><br><span id="decodedValue"></span></div>
 </section>
 <section class="panel">
 <h2>Manual entry fallback</h2>
@@ -84,13 +84,13 @@ async function record(raw){
 }
 function onScanSuccess(decodedText){
  const now=Date.now();if(recording||decodedText===lastValue&&now-lastAt<3000)return;
- lastValue=decodedText;lastAt=now;$('barcode').value=decodedText;record(decodedText);
+ lastValue=decodedText;lastAt=now;$('barcode').value=decodedText;$('decodedValue').textContent=decodedText;$('decoded').classList.remove('hidden');if(!/^(.*)-\s*(30|50)$/i.test(decodedText.trim())){status('Code 128 detected, but it does not end in -30 or -50. Check the barcode content.');return;}record(decodedText);
 }
 function start(){
  if(!window.isSecureContext){status('Open this page over HTTPS to use the camera.');return;}
  if(!window.Html5QrcodeScanner){status('Scanner library failed to load. Check internet connection and refresh.');return;}
  const F=Html5QrcodeSupportedFormats;
- const formats=[F.CODE_128,F.CODE_39,F.CODE_93,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.ITF].filter(x=>x!==undefined);
+ const formats=[F.CODE_128]; // Deliberately Code 128 ONLY: ignore numeric EAN/UPC barcodes.
  scannerWidget=new Html5QrcodeScanner('scanner',{
   fps:12,
   qrbox:{width:Math.min(420,Math.max(260,window.innerWidth-100)),height:150},
