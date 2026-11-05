@@ -3,148 +3,108 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LIQD LAB Sales Scanner</title>
+<title>LIQD LAB Code 128 Scanner</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;padding:16px;background:#f4f4f1;color:#171717;font:16px Arial,sans-serif}
-.wrap{max-width:540px;margin:auto}.brand{font-weight:800;letter-spacing:3px;font-size:23px;margin:8px 0}
-.sub,.muted{font-size:12px;color:#666}.card{background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:16px;margin:12px 0}
-button,input{font:inherit}button{border:0;border-radius:10px;padding:13px;font-weight:700;cursor:pointer}
-.dark{background:#171717;color:#fff;width:100%}.secondary{background:#e8e8e4;color:#171717}
-input{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px;background:white}
-label{display:block;margin:12px 0 6px;font-size:13px;color:#555}.row{display:grid;grid-template-columns:1fr auto;gap:8px}
-.status{white-space:pre-wrap;background:#f2f2f2;padding:11px;border-radius:10px;font-size:13px;margin-top:10px}
-.hidden{display:none!important}.name{font-size:18px;font-weight:bold;margin:6px 0}
-#reader{width:100%;margin-top:12px}#reader video{width:100%!important;border-radius:10px}
-#reader__scan_region{min-height:180px}#reader__dashboard{padding:8px 0}
-#reader button{background:#171717;color:white;margin:5px}#reader select{max-width:100%;padding:8px;border-radius:8px}
-.pill{display:inline-block;background:#eee;padding:6px 10px;border-radius:20px;font-size:12px}
+*{box-sizing:border-box}body{margin:0;background:#f4f4f1;color:#171717;font:16px Arial,sans-serif;padding:16px}
+main{max-width:560px;margin:auto}.brand{font-size:23px;font-weight:800;letter-spacing:3px;margin:8px 0}.muted{font-size:12px;color:#666}
+.panel{background:white;border:1px solid #e2e2df;border-radius:16px;padding:16px;margin:14px 0}
+h2{font-size:16px;margin:0 0 12px}button,input{font:inherit}button{border:0;border-radius:10px;padding:13px 16px;font-weight:700;cursor:pointer}
+.primary{background:#171717;color:white;width:100%}.secondary{background:#e8e8e4;color:#171717}
+#scanner{margin-top:14px}#scanner video{width:100%!important;border-radius:12px}
+#scanner__dashboard{padding:10px 0}#scanner__dashboard_section_csr button{background:#171717;color:white;margin:4px}
+#scanner__dashboard_section_csr select{padding:9px;border-radius:8px;max-width:100%}
+#scanner__scan_region{position:relative;min-height:220px;border-radius:12px;overflow:hidden;background:#111}
+#scanner__scan_region img{display:none!important}
+#scanner__scan_region video{object-fit:cover}
+.scan-help{display:flex;gap:8px;align-items:center;margin:10px 0;color:#555;font-size:13px}
+.scan-icon{width:9px;height:9px;border-radius:50%;background:#13a36d;display:inline-block}
+label{display:block;margin:12px 0 6px;font-size:13px;color:#555}
+input{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px}
+.row{display:grid;grid-template-columns:1fr auto;gap:8px}.status{white-space:pre-wrap;background:#f1f1ee;padding:12px;border-radius:10px;font-size:13px;margin-top:12px}
+.hidden{display:none!important}.success{border-left:4px solid #159766;padding-left:12px}
 </style>
 </head>
-<body>
-<div class="wrap">
-  <div class="brand">LIQD LAB</div>
-  <div class="sub">BARCODE SALES RECORDER</div>
-  <div class="card">
-    <button id="scanBtn" class="dark" type="button">START BARCODE SCANNER</button>
-    <div id="reader" class="hidden"></div>
-    <label for="barcode">Or enter barcode manually</label>
-    <div class="row"><input id="barcode" autocomplete="off" placeholder="e.g. yum pistachio gelato 33-30"><button id="manualBtn" class="secondary" type="button">Record</button></div>
-    <div id="status" class="status">Ready. Start scanner or enter a barcode.</div>
-  </div>
-  <div id="result" class="card hidden">
-    <div class="muted">SALE RECORDED</div>
-    <div id="productName" class="name"></div>
-    <div id="productSize" class="pill"></div>
-    <p id="resultMeta" class="muted"></p>
-    <button id="nextBtn" class="dark" type="button">SCAN NEXT PRODUCT</button>
-  </div>
-</div>
+<body><main>
+<div class="brand">LIQD LAB</div><div class="muted">CODE 128 BARCODE SALES SCANNER</div>
+<section class="panel">
+<h2>Barcode scanner</h2>
+<div class="muted">Code 128 is explicitly enabled, along with common retail barcode formats.</div>
+<div id="scanner"></div>
+<div class="scan-help"><span class="scan-icon"></span><span>Place the complete barcode inside the scan frame. Hold steady until it reads.</span></div>
+<div id="status" class="status">Scanner loading…</div>
+</section>
+<section class="panel">
+<h2>Manual entry fallback</h2>
+<label for="barcode">Barcode text</label>
+<div class="row"><input id="barcode" placeholder="product name-30 or product name-50"><button id="manual" class="secondary">Record</button></div>
+</section>
+<section id="result" class="panel hidden success">
+<strong id="resultText"></strong><div id="resultMeta" class="muted"></div>
+</section>
+</main>
 <script>
 'use strict';
 const API_URL='https://script.google.com/macros/s/AKfycbwFhK1HaEYDtbqGrYo7PsoUqGIF3jV_Dbn-I7tEeg-wW30PtlaIbGCouB5ky_1dlWs_/exec';
 const $=id=>document.getElementById(id);
-let scanner=null, busy=false;
-function showStatus(message){$('status').textContent=message;}
+let scannerWidget=null,recording=false,lastValue='',lastAt=0;
+function status(t){$('status').textContent=t;}
 function api(params){
-  return new Promise((resolve,reject)=>{
-    if(!API_URL || !/\/exec$/.test(API_URL)){reject(new Error('Apps Script Web App URL is not configured.'));return;}
-    const cb='liqd_'+Date.now()+'_'+Math.floor(Math.random()*100000);
-    const script=document.createElement('script');
-    const timer=setTimeout(()=>{cleanup();reject(new Error('API timed out. Check Apps Script deployment access.'));},15000);
-    function cleanup(){clearTimeout(timer);delete window[cb];script.remove();}
-    window[cb]=data=>{cleanup();if(data&&data.ok)resolve(data);else reject(new Error(data&&data.error?data.error:'API request failed'));};
-    script.onerror=()=>{cleanup();reject(new Error('Could not connect to Google Sheets API.'));};
-    params.callback=cb;
-    script.src=API_URL+'?'+new URLSearchParams(params).toString();
-    document.body.appendChild(script);
-  });
+ return new Promise((resolve,reject)=>{
+  const cb='liqd_'+Date.now()+'_'+Math.floor(Math.random()*1e6),s=document.createElement('script');
+  const timer=setTimeout(()=>{clean();reject(new Error('API timed out.'));},15000);
+  function clean(){clearTimeout(timer);delete window[cb];s.remove();}
+  window[cb]=d=>{clean();d&&d.ok?resolve(d):reject(new Error(d&&d.error||'API error'));};
+  s.onerror=()=>{clean();reject(new Error('Could not connect to Apps Script.'));};
+  params.callback=cb;s.src=API_URL+'?'+new URLSearchParams(params).toString();document.body.appendChild(s);
+ });
 }
-function parseBarcode(raw){
-  const value=String(raw||'').trim();
-  const match=value.match(/^(.*)-\s*(30|50)$/i);
-  if(!match)throw new Error('Barcode must end in -30 or -50. Read: '+value);
-  const product=match[1].trim();
-  if(!product)throw new Error('Product name is missing in barcode.');
-  return {barcode:value,product,size:match[2]};
+function parse(raw){
+ const v=String(raw||'').trim(),m=v.match(/^(.*)-\s*(30|50)$/i);
+ if(!m||!m[1].trim())throw new Error('Barcode must end in -30 or -50.');
+ return {barcode:v,product:m[1].trim(),size:m[2]};
 }
-function getLocation(){
-  return new Promise(resolve=>{
-    if(!navigator.geolocation){resolve({});return;}
-    navigator.geolocation.getCurrentPosition(
-      p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),
-      ()=>resolve({}),
-      {enableHighAccuracy:true,timeout:8000,maximumAge:60000}
-    );
-  });
+function gps(){
+ return new Promise(resolve=>{
+  if(!navigator.geolocation)return resolve({});
+  navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),()=>resolve({}),{enableHighAccuracy:true,timeout:7000,maximumAge:60000});
+ });
 }
-async function recordSale(raw){
-  if(busy)return;
-  busy=true;
-  try{
-    const parsed=parseBarcode(raw);
-    showStatus('Recording '+parsed.product+' ('+parsed.size+' ml)…');
-    const loc=await getLocation();
-    const result=await api({
-      action:'sale',barcode:parsed.barcode,product:parsed.product,size:parsed.size,
-      lat:loc.lat===undefined?'':String(loc.lat),
-      lng:loc.lng===undefined?'':String(loc.lng),
-      device:(navigator.userAgent||'').slice(0,180)
-    });
-    $('productName').textContent=result.product;
-    $('productSize').textContent=parsed.size+' ml';
-    $('resultMeta').textContent='Sales count: '+result.count+' • '+result.timestamp+' IST'+(loc.lat!==undefined?' • GPS saved':' • GPS unavailable');
-    $('result').classList.remove('hidden');
-    showStatus('Sale recorded successfully.');
-    $('barcode').value='';
-  }catch(err){showStatus('Not recorded: '+err.message);}
-  finally{busy=false;}
+async function record(raw){
+ if(recording)return;recording=true;
+ try{
+  const p=parse(raw);status('Detected '+p.barcode+'. Recording sale…');
+  const loc=await gps();
+  const d=await api({action:'sale',barcode:p.barcode,product:p.product,size:p.size,lat:loc.lat??'',lng:loc.lng??'',device:(navigator.userAgent||'').slice(0,160)});
+  $('resultText').textContent=p.product+' · '+p.size+' ml';
+  $('resultMeta').textContent='Sales count: '+d.count+' · '+d.timestamp+' IST'+(loc.lat!==undefined?' · Location logged':' · Location unavailable');
+  $('result').classList.remove('hidden');status('Sale recorded successfully.');
+ }catch(e){status('Not recorded: '+e.message);}
+ finally{recording=false;}
 }
-async function stopScanner(){
-  if(!scanner)return;
-  try{await scanner.stop();}catch(e){}
-  try{await scanner.clear();}catch(e){}
-  scanner=null;
-  $('reader').classList.add('hidden');
-  $('scanBtn').textContent='START BARCODE SCANNER';
+function onScanSuccess(decodedText){
+ const now=Date.now();if(recording||decodedText===lastValue&&now-lastAt<3000)return;
+ lastValue=decodedText;lastAt=now;$('barcode').value=decodedText;record(decodedText);
 }
-async function startScan(){
-  if(!window.isSecureContext){showStatus('Camera requires HTTPS. Open the GitHub Pages HTTPS address.');return;}
-  if(!window.Html5Qrcode){showStatus('Scanner library did not load. Check internet connection and refresh.');return;}
-  if(scanner){await stopScanner();return;}
-  $('reader').classList.remove('hidden');
-  $('scanBtn').textContent='STOP SCANNER';
-  showStatus('Starting camera…');
-  const formats=[
-    Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.CODE_39,
-    Html5QrcodeSupportedFormats.CODE_93,Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.UPC_E,Html5QrcodeSupportedFormats.ITF
-  ];
-  scanner=new Html5Qrcode('reader',{formatsToSupport:formats,verbose:false});
-  try{
-    await scanner.start(
-      {facingMode:'environment'},
-      {fps:12,qrbox:{width:Math.min(340,window.innerWidth-90),height:130},aspectRatio:1.7778},
-      async decoded=>{
-        if(busy)return;
-        const value=decoded.trim();
-        $('barcode').value=value;
-        await stopScanner();
-        await recordSale(value);
-      },
-      ()=>{}
-    );
-    showStatus('Scanner active. Fit the full barcode inside the box and hold steady.');
-  }catch(err){
-    await stopScanner();
-    showStatus('Camera/scanner error: '+(err&&err.message?err.message:String(err))+' Check camera permission.');
-  }
+function start(){
+ if(!window.isSecureContext){status('Open this page over HTTPS to use the camera.');return;}
+ if(!window.Html5QrcodeScanner){status('Scanner library failed to load. Check internet connection and refresh.');return;}
+ const F=Html5QrcodeSupportedFormats;
+ const formats=[F.CODE_128,F.CODE_39,F.CODE_93,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.ITF].filter(x=>x!==undefined);
+ scannerWidget=new Html5QrcodeScanner('scanner',{
+  fps:12,
+  qrbox:{width:Math.min(420,Math.max(260,window.innerWidth-100)),height:150},
+  aspectRatio:2.0,
+  rememberLastUsedCamera:true,
+  showTorchButtonIfSupported:true,
+  showZoomSliderIfSupported:true,
+  formatsToSupport:formats,
+  videoConstraints:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}
+ },false);
+ scannerWidget.render(onScanSuccess,()=>{});
+ status('Scanner ready. Select the rear camera if prompted, then aim at the barcode.');
 }
-$('scanBtn').addEventListener('click',startScan);
-$('manualBtn').addEventListener('click',()=>recordSale($('barcode').value));
-$('barcode').addEventListener('keydown',e=>{if(e.key==='Enter')recordSale($('barcode').value);});
-$('nextBtn').addEventListener('click',()=>{$('result').classList.add('hidden');$('barcode').value='';showStatus('Ready for next sale.');});
-</script>
-</body>
-</html>
+$('manual').addEventListener('click',()=>record($('barcode').value));
+$('barcode').addEventListener('keydown',e=>{if(e.key==='Enter')record($('barcode').value);});
+start();
+</script></body></html>
