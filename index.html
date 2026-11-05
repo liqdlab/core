@@ -30,7 +30,44 @@ function api(params){
 }
 async function lookup(){let b=el('barcode').value.trim();if(!b)return status('Enter or scan a barcode.');status('Looking up…');try{let r=await api({action:'lookup',barcode:b});product=r.product;el('name').textContent=product.name+' — '+product.variant;el('meta').textContent='SKU: '+product.sku+' • Stock: '+product.stock;el('price').value=product.price;el('qty').value=1;el('type').value='SALE';el('productCard').classList.remove('hidden');status('Product ready.\nQuantity defaults to 1.')}catch(e){el('productCard').classList.add('hidden');status(e.message)}}
 function step(n){el('qty').value=Math.max(1,parseInt(el('qty').value||1)+n)}
-async function startScan(){if(!window.isSecureContext){status('Camera requires an HTTPS website.');return}if(!window.Html5Qrcode){status('Scanner library did not load. Check your internet connection and refresh.');return}el('reader').classList.remove('hidden');if(scanner)return;try{scanner=new Html5Qrcode('reader');await scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:260,height:130}},async text=>{el('barcode').value=text;await scanner.stop();scanner=null;el('reader').classList.add('hidden');lookup()},()=>{})}catch(e){status('Camera error: '+e+'\nAllow camera permission for this website in Chrome site settings.');scanner=null}}
+async function startScan(){
+  if(!window.isSecureContext){status('Camera requires an HTTPS website.');return;}
+  if(!window.Html5Qrcode || !window.Html5QrcodeSupportedFormats){status('Scanner library did not load. Check your internet connection and refresh.');return;}
+  el('reader').classList.remove('hidden');
+  if(scanner)return;
+  try{
+    const formats=[
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.CODE_93,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.QR_CODE
+    ].filter(v=>v!==undefined);
+    scanner=new Html5Qrcode('reader',{formatsToSupport:formats,verbose:false});
+    await scanner.start(
+      {facingMode:'environment'},
+      {fps:15, aspectRatio:1.7777778},
+      async decodedText=>{
+        el('barcode').value=decodedText;
+        status('Barcode detected: '+decodedText+'\nLooking up product…');
+        try{await scanner.stop();}catch(e){}
+        scanner=null;
+        el('reader').classList.add('hidden');
+        await lookup();
+      },
+      ()=>{}
+    );
+    status('Camera active. Hold the complete barcode steady, fill the camera view, and avoid glare.');
+  }catch(e){
+    status('Camera error: '+(e&&e.message?e.message:e)+'\nAllow camera permission for this website in Chrome site settings.');
+    if(scanner){try{await scanner.clear();}catch(x){}}
+    scanner=null;
+  }
+}
 function location(){return new Promise(resolve=>{if(!navigator.geolocation)return resolve({});navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),()=>resolve({}),{enableHighAccuracy:true,timeout:10000,maximumAge:60000})})}
 async function save(){if(!product)return status('Find a product first.');let q=Number(el('qty').value);if(!Number.isInteger(q)||q<1)return status('Quantity must be at least 1.');status('Requesting location and saving…');let loc=await location();try{let r=await api({action:'save',barcode:product.barcode,type:el('type').value,qty:q,price:el('price').value,lat:loc.lat??'',lng:loc.lng??'',device:navigator.userAgent,notes:el('notes').value});el('meta').textContent='SKU: '+product.sku+' • Stock: '+r.stock;el('qty').value=1;status('Saved • '+r.timestamp+' IST\nStock now: '+r.stock+'\nAmount: ₹'+r.amount+(loc.lat?'\nGPS captured.':'\nGPS unavailable; saved without location.'))}catch(e){status('Not saved: '+e.message)}}
 </script></body></html>
