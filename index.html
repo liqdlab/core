@@ -1,63 +1,150 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LIQD LAB Sales Scanner</title>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<style>*{box-sizing:border-box}body{margin:0;padding:16px;background:#f4f4f1;color:#171717;font:16px Arial}.wrap{max-width:520px;margin:auto}.brand{font-weight:800;letter-spacing:3px;font-size:23px;margin:8px 0}.sub{font-size:12px;color:#666;margin-bottom:16px}.card{background:white;border:1px solid #e5e5e5;border-radius:16px;padding:16px;margin:12px 0}button,input{font:inherit}button{border:0;border-radius:10px;padding:14px;font-weight:700;cursor:pointer}.dark{background:#171717;color:white;width:100%}input{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px}label{display:block;margin:12px 0 6px;font-size:13px;color:#555}.row{display:grid;grid-template-columns:1fr auto;gap:8px}.status{white-space:pre-wrap;background:#f2f2f2;padding:11px;border-radius:10px;font-size:13px;margin-top:10px}.muted{font-size:12px;color:#666}.hidden{display:none}#reader{width:100%;}#reader video{width:100%!important;border-radius:12px;}#reader__scan_region{min-height:190px;}#reader__dashboard{padding:8px 0;}#reader button{background:#171717;color:white;margin:5px;}#reader select{max-width:100%;padding:8px;border-radius:8px;} .name{font-size:18px;font-weight:bold;margin:6px 0}</style></head>
-<body><div class="wrap"><div class="brand">LIQD LAB</div><div class="sub">BARCODE • SALES RECORDING</div>
-<div class="card"><button class="dark" onclick="startScan()">SCAN BARCODE WITH CAMERA</button><div id="reader" class="hidden" style="margin-top:12px"></div><label>Or enter barcode manually</label><div class="row"><input id="barcode" placeholder="e.g. yum pistachio gelato 33-30"><button onclick="record()" class="dark">Record</button></div><div id="status" class="status">Ready to scan.</div></div>
-<div id="result" class="card hidden"><div class="muted">SALE RECORDED</div><div id="name" class="name"></div><div id="detail" class="muted"></div></div></div>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIQD LAB Sales Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:16px;background:#f4f4f1;color:#171717;font:16px Arial,sans-serif}
+.wrap{max-width:540px;margin:auto}.brand{font-weight:800;letter-spacing:3px;font-size:23px;margin:8px 0}
+.sub,.muted{font-size:12px;color:#666}.card{background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:16px;margin:12px 0}
+button,input{font:inherit}button{border:0;border-radius:10px;padding:13px;font-weight:700;cursor:pointer}
+.dark{background:#171717;color:#fff;width:100%}.secondary{background:#e8e8e4;color:#171717}
+input{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px;background:white}
+label{display:block;margin:12px 0 6px;font-size:13px;color:#555}.row{display:grid;grid-template-columns:1fr auto;gap:8px}
+.status{white-space:pre-wrap;background:#f2f2f2;padding:11px;border-radius:10px;font-size:13px;margin-top:10px}
+.hidden{display:none!important}.name{font-size:18px;font-weight:bold;margin:6px 0}
+#reader{width:100%;margin-top:12px}#reader video{width:100%!important;border-radius:10px}
+#reader__scan_region{min-height:180px}#reader__dashboard{padding:8px 0}
+#reader button{background:#171717;color:white;margin:5px}#reader select{max-width:100%;padding:8px;border-radius:8px}
+.pill{display:inline-block;background:#eee;padding:6px 10px;border-radius:20px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">LIQD LAB</div>
+  <div class="sub">BARCODE SALES RECORDER</div>
+  <div class="card">
+    <button id="scanBtn" class="dark" type="button">START BARCODE SCANNER</button>
+    <div id="reader" class="hidden"></div>
+    <label for="barcode">Or enter barcode manually</label>
+    <div class="row"><input id="barcode" autocomplete="off" placeholder="e.g. yum pistachio gelato 33-30"><button id="manualBtn" class="secondary" type="button">Record</button></div>
+    <div id="status" class="status">Ready. Start scanner or enter a barcode.</div>
+  </div>
+  <div id="result" class="card hidden">
+    <div class="muted">SALE RECORDED</div>
+    <div id="productName" class="name"></div>
+    <div id="productSize" class="pill"></div>
+    <p id="resultMeta" class="muted"></p>
+    <button id="nextBtn" class="dark" type="button">SCAN NEXT PRODUCT</button>
+  </div>
+</div>
 <script>
-const API_URL='https://script.google.com/macros/s/AKfycbwFhK1HaEYDtbqGrYo7PsoUqGIF3jV_Dbn-I7tEeg-wW30PtlaIbGCouB5ky_1dlWs_/exec'; let scanner=null, busy=false;
-const el=id=>document.getElementById(id), status=t=>el('status').textContent=t;
+'use strict';
+const API_URL='https://script.google.com/macros/s/AKfycbwFhK1HaEYDtbqGrYo7PsoUqGIF3jV_Dbn-I7tEeg-wW30PtlaIbGCouB5ky_1dlWs_/exec';
+const $=id=>document.getElementById(id);
+let scanner=null, busy=false;
+function showStatus(message){$('status').textContent=message;}
 function api(params){
- if(!API_URL || !/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(API_URL)) return Promise.reject(new Error('Apps Script API URL is not configured.'));
- return new Promise((resolve,reject)=>{const cb='liqdcb'+Date.now()+Math.floor(Math.random()*1000),s=document.createElement('script');let done=false;const cleanup=()=>{if(done)return;done=true;delete window[cb];s.remove();clearTimeout(timer)};const timer=setTimeout(()=>{cleanup();reject(new Error('API timed out.'))},20000);params.callback=cb;window[cb]=d=>{cleanup();d&&d.ok?resolve(d):reject(new Error(d&&d.error?d.error:'Request failed'))};s.onerror=()=>{cleanup();reject(new Error('Could not reach Apps Script API.'))};s.src=API_URL+'?'+new URLSearchParams(params).toString();document.body.appendChild(s)});
+  return new Promise((resolve,reject)=>{
+    if(!API_URL || !/\/exec$/.test(API_URL)){reject(new Error('Apps Script Web App URL is not configured.'));return;}
+    const cb='liqd_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+    const script=document.createElement('script');
+    const timer=setTimeout(()=>{cleanup();reject(new Error('API timed out. Check Apps Script deployment access.'));},15000);
+    function cleanup(){clearTimeout(timer);delete window[cb];script.remove();}
+    window[cb]=data=>{cleanup();if(data&&data.ok)resolve(data);else reject(new Error(data&&data.error?data.error:'API request failed'));};
+    script.onerror=()=>{cleanup();reject(new Error('Could not connect to Google Sheets API.'));};
+    params.callback=cb;
+    script.src=API_URL+'?'+new URLSearchParams(params).toString();
+    document.body.appendChild(script);
+  });
 }
-function parseBarcode(s){const m=String(s||'').trim().match(/^(.*)-(30|50)$/i);return m?{name:m[1].trim(),size:m[2]}:null}
-async function record(){if(busy)return;const barcode=el('barcode').value.trim(),parsed=parseBarcode(barcode);if(!parsed)return status('Barcode must end in -30 or -50.');busy=true;status('Capturing location and recording sale…');const loc=await getLocation();try{const r=await api({action:'save',barcode,lat:loc.lat??'',lng:loc.lng??'',device:navigator.userAgent});el('name').textContent=r.product;el('detail').textContent='Size: '+r.size+' ml • Total sales for this size: '+r.count+' • '+r.timestamp+' IST'+(r.locationSaved?' • Location logged':' • Location unavailable');el('result').classList.remove('hidden');status('Sale successfully recorded.');el('barcode').value='';}catch(e){status('Not recorded: '+e.message)}finally{busy=false}}
-function getLocation(){return new Promise(resolve=>{if(!navigator.geolocation)return resolve({});navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),()=>resolve({}),{enableHighAccuracy:true,timeout:10000,maximumAge:30000})})}
-async function startScan(){
-  if(!window.isSecureContext){status('Camera requires HTTPS.');return;}
-  if(!window.Html5QrcodeScanner || !window.Html5QrcodeSupportedFormats){
-    status('Barcode scanner library did not load. Check internet and refresh.');
-    return;
-  }
-  if(scanner) return;
-  el('reader').classList.remove('hidden');
-  status('Opening barcode scanner…');
+function parseBarcode(raw){
+  const value=String(raw||'').trim();
+  const match=value.match(/^(.*)-\s*(30|50)$/i);
+  if(!match)throw new Error('Barcode must end in -30 or -50. Read: '+value);
+  const product=match[1].trim();
+  if(!product)throw new Error('Product name is missing in barcode.');
+  return {barcode:value,product,size:match[2]};
+}
+function getLocation(){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation){resolve({});return;}
+    navigator.geolocation.getCurrentPosition(
+      p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),
+      ()=>resolve({}),
+      {enableHighAccuracy:true,timeout:8000,maximumAge:60000}
+    );
+  });
+}
+async function recordSale(raw){
+  if(busy)return;
+  busy=true;
   try{
-    const F=Html5QrcodeSupportedFormats;
-    const formats=[
-      F.CODE_128,F.CODE_39,F.CODE_93,F.EAN_13,F.EAN_8,
-      F.UPC_A,F.UPC_E,F.ITF,F.QR_CODE
-    ].filter(v=>v!==undefined);
-    scanner=new Html5QrcodeScanner('reader',{
-      fps:12,
-      qrbox:{width:320,height:160},
-      aspectRatio:1.7777778,
-      rememberLastUsedCamera:true,
-      showTorchButtonIfSupported:true,
-      showZoomSliderIfSupported:true,
-      formatsToSupport:formats,
-      videoConstraints:{
-        facingMode:{ideal:'environment'},
-        width:{ideal:1920},
-        height:{ideal:1080}
-      }
-    },false);
-    scanner.render(async decodedText=>{
-      if(busy) return;
-      el('barcode').value=decodedText;
-      status('Barcode detected: '+decodedText+'\nRecording sale…');
-      try{await scanner.clear();}catch(e){}
-      scanner=null;
-      el('reader').classList.add('hidden');
-      await record();
-    },()=>{});
-    status('Scanner ready. Place the complete barcode inside the scan box.');
-  }catch(e){
-    status('Scanner error: '+(e&&e.message?e.message:e));
-    if(scanner){try{await scanner.clear();}catch(x){}}
-    scanner=null;
+    const parsed=parseBarcode(raw);
+    showStatus('Recording '+parsed.product+' ('+parsed.size+' ml)…');
+    const loc=await getLocation();
+    const result=await api({
+      action:'sale',barcode:parsed.barcode,product:parsed.product,size:parsed.size,
+      lat:loc.lat===undefined?'':String(loc.lat),
+      lng:loc.lng===undefined?'':String(loc.lng),
+      device:(navigator.userAgent||'').slice(0,180)
+    });
+    $('productName').textContent=result.product;
+    $('productSize').textContent=parsed.size+' ml';
+    $('resultMeta').textContent='Sales count: '+result.count+' • '+result.timestamp+' IST'+(loc.lat!==undefined?' • GPS saved':' • GPS unavailable');
+    $('result').classList.remove('hidden');
+    showStatus('Sale recorded successfully.');
+    $('barcode').value='';
+  }catch(err){showStatus('Not recorded: '+err.message);}
+  finally{busy=false;}
+}
+async function stopScanner(){
+  if(!scanner)return;
+  try{await scanner.stop();}catch(e){}
+  try{await scanner.clear();}catch(e){}
+  scanner=null;
+  $('reader').classList.add('hidden');
+  $('scanBtn').textContent='START BARCODE SCANNER';
+}
+async function startScan(){
+  if(!window.isSecureContext){showStatus('Camera requires HTTPS. Open the GitHub Pages HTTPS address.');return;}
+  if(!window.Html5Qrcode){showStatus('Scanner library did not load. Check internet connection and refresh.');return;}
+  if(scanner){await stopScanner();return;}
+  $('reader').classList.remove('hidden');
+  $('scanBtn').textContent='STOP SCANNER';
+  showStatus('Starting camera…');
+  const formats=[
+    Html5QrcodeSupportedFormats.CODE_128,Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.CODE_93,Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,Html5QrcodeSupportedFormats.ITF
+  ];
+  scanner=new Html5Qrcode('reader',{formatsToSupport:formats,verbose:false});
+  try{
+    await scanner.start(
+      {facingMode:'environment'},
+      {fps:12,qrbox:{width:Math.min(340,window.innerWidth-90),height:130},aspectRatio:1.7778},
+      async decoded=>{
+        if(busy)return;
+        const value=decoded.trim();
+        $('barcode').value=value;
+        await stopScanner();
+        await recordSale(value);
+      },
+      ()=>{}
+    );
+    showStatus('Scanner active. Fit the full barcode inside the box and hold steady.');
+  }catch(err){
+    await stopScanner();
+    showStatus('Camera/scanner error: '+(err&&err.message?err.message:String(err))+' Check camera permission.');
   }
 }
-</script></body></html>
+$('scanBtn').addEventListener('click',startScan);
+$('manualBtn').addEventListener('click',()=>recordSale($('barcode').value));
+$('barcode').addEventListener('keydown',e=>{if(e.key==='Enter')recordSale($('barcode').value);});
+$('nextBtn').addEventListener('click',()=>{$('result').classList.add('hidden');$('barcode').value='';showStatus('Ready for next sale.');});
+</script>
+</body>
+</html>
