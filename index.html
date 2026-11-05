@@ -15,5 +15,17 @@ function api(params){
 function parseBarcode(s){const m=String(s||'').trim().match(/^(.*)-(30|50)$/i);return m?{name:m[1].trim(),size:m[2]}:null}
 async function record(){if(busy)return;const barcode=el('barcode').value.trim(),parsed=parseBarcode(barcode);if(!parsed)return status('Barcode must end in -30 or -50.');busy=true;status('Capturing location and recording sale…');const loc=await getLocation();try{const r=await api({action:'save',barcode,lat:loc.lat??'',lng:loc.lng??'',device:navigator.userAgent});el('name').textContent=r.product;el('detail').textContent='Size: '+r.size+' ml • Total sales for this size: '+r.count+' • '+r.timestamp+' IST'+(r.locationSaved?' • Location logged':' • Location unavailable');el('result').classList.remove('hidden');status('Sale successfully recorded.');el('barcode').value='';}catch(e){status('Not recorded: '+e.message)}finally{busy=false}}
 function getLocation(){return new Promise(resolve=>{if(!navigator.geolocation)return resolve({});navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),()=>resolve({}),{enableHighAccuracy:true,timeout:10000,maximumAge:30000})})}
-async function startScan(){if(!window.isSecureContext)return status('Camera requires HTTPS.');if(!window.Html5Qrcode)return status('Scanner library failed to load.');el('reader').classList.remove('hidden');if(scanner)return;try{const F=Html5QrcodeSupportedFormats;const formats=[F.CODE_128,F.CODE_39,F.CODE_93,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.ITF,F.QR_CODE].filter(v=>v!==undefined);scanner=new Html5Qrcode('reader',{formatsToSupport:formats,verbose:false});await scanner.start({facingMode:'environment'},{fps:15,qrbox:false},async text=>{el('barcode').value=text;try{await scanner.stop()}catch(e){}scanner=null;el('reader').classList.add('hidden');await record()},()=>{});status('Camera active. Show the full barcode steadily.')}catch(e){status('Camera error: '+e.message);if(scanner){try{await scanner.clear()}catch(x){}}scanner=null}}
+async function startScan(){if(!window.isSecureContext)return status('Camera requires HTTPS.');if(!window.Html5Qrcode || !window.Html5QrcodeSupportedFormats)return status('Scanner library did not load. Check your internet connection and refresh.');el('reader').classList.remove('hidden');if(scanner)return;try{const F=Html5QrcodeSupportedFormats;const formats=[F.CODE_128,F.CODE_39,F.CODE_93,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.ITF,F.QR_CODE].filter(v=>v!==undefined);scanner=new Html5Qrcode('reader',{formatsToSupport:formats,verbose:false});await scanner.start(
+      {facingMode:'environment'},
+      {fps:15,aspectRatio:1.7777778},
+      async text=>{
+        el('barcode').value=text;
+        status('Barcode detected: '+text+'\nRecording sale…');
+        try{await scanner.stop();}catch(e){}
+        scanner=null;
+        el('reader').classList.add('hidden');
+        await record();
+      },
+      ()=>{}
+    );status('Camera active. Show the full barcode steadily.')}catch(e){status('Camera error: '+e.message);if(scanner){try{await scanner.clear()}catch(x){}}scanner=null}}
 </script></body></html>
