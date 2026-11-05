@@ -1,23 +1,285 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LIQD LAB Sales</title>
-<script src="https://unpkg.com/html5-qrcode"></script>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#171717">
+<title>LIQD LAB | Sales & Inventory</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;padding:16px;background:#f4f4f1;color:#171717;font:16px Arial}.wrap{max-width:520px;margin:auto}.brand{font-weight:800;letter-spacing:3px;font-size:23px;margin:8px 0}.sub{font-size:12px;color:#666;margin-bottom:16px}.card{background:white;border:1px solid #e5e5e5;border-radius:16px;padding:16px;margin:12px 0}button,input,select{font:inherit}button{border:0;border-radius:10px;padding:14px;font-weight:700;cursor:pointer}.dark{background:#171717;color:white;width:100%}.green{background:#e5f4e8}.red{background:#fae8e7}input,select{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px;background:white}label{display:block;margin:12px 0 6px;font-size:13px;color:#555}.row{display:grid;grid-template-columns:1fr auto;gap:8px}.qty{display:grid;grid-template-columns:48px 1fr 48px;gap:8px}.qty input{text-align:center;font-size:20px;font-weight:bold}.status{white-space:pre-wrap;background:#f2f2f2;padding:11px;border-radius:10px;font-size:13px;margin-top:10px}.muted{font-size:12px;color:#666}.hidden{display:none}.name{font-size:18px;font-weight:bold;margin:6px 0}
-</style></head><body><div class="wrap"><div class="brand">LIQD LAB</div><div class="sub">BARCODE • SALES • INVENTORY</div>
-<div class="card"><button class="dark" onclick="startScan()">SCAN BARCODE WITH CAMERA</button><div id="reader" class="hidden" style="margin-top:12px"></div>
-<label>Or enter barcode manually</label><div class="row"><input id="barcode" placeholder="Barcode number"><button onclick="lookup()" class="dark">Find</button></div><div id="status" class="status">Ready to scan.</div></div>
-<div id="productCard" class="card hidden"><div class="muted">PRODUCT FOUND</div><div id="name" class="name"></div><div id="meta" class="muted"></div>
-<label>Transaction</label><select id="type"><option value="SALE">SALE — deduct stock</option><option value="RESTOCK">RESTOCK — add stock</option><option value="RETURN">RETURN — add stock</option><option value="ADJUSTMENT">SET STOCK — exact quantity</option></select>
-<label>Quantity (default 1)</label><div class="qty"><button class="green" onclick="step(-1)">−</button><input id="qty" type="number" min="1" value="1"><button class="green" onclick="step(1)">+</button></div>
-<label>Unit selling price (₹)</label><input id="price" type="number" min="0" step=".01"><label>Notes</label><input id="notes" placeholder="Optional">
-<p class="muted">Timestamp is automatic (India time). GPS is requested when saving. If location is denied, transaction still saves without GPS.</p><button class="dark" onclick="save()">CONFIRM TRANSACTION</button></div></div>
+:root{font-family:Inter,Arial,sans-serif;color:#171717;background:#f4f4f1}
+*{box-sizing:border-box}body{margin:0;padding:16px 14px 32px}.wrap{max-width:540px;margin:auto}
+.brand{font-size:24px;font-weight:800;letter-spacing:3px;margin:8px 0 3px}.subtitle{font-size:11px;letter-spacing:1.5px;color:#777;margin-bottom:18px}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #00000008}
+button,input,select{font:inherit}button{border:0;border-radius:11px;padding:14px 12px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}.primary{background:#171717;color:white;width:100%}.secondary{background:#eee;color:#171717}
+label{display:block;margin:13px 0 6px;font-size:13px;color:#555}input,select{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px;background:#fff;min-height:46px}
+.row{display:grid;grid-template-columns:1fr auto;gap:8px}.qtyrow{display:grid;grid-template-columns:48px 1fr 48px;gap:8px}.qtyrow input{text-align:center;font-size:20px;font-weight:700}
+.status{margin-top:12px;padding:12px;border-radius:10px;background:#f1f1ef;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.status.error{background:#fff0ef;color:#9d1c16}.status.ok{background:#eaf6ec;color:#176b2c}
+.muted{font-size:12px;color:#777;line-height:1.45}.hidden{display:none!important}.product-name{font-size:19px;font-weight:750;margin:5px 0}.product-meta{font-size:13px;color:#666}
+#reader{margin-top:14px;overflow:hidden;border-radius:12px}#reader video{border-radius:10px}
+.pill{display:inline-block;padding:5px 9px;background:#f0f0ed;border-radius:30px;font-size:11px;color:#555}
+.actionrow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">LIQD LAB</div>
+  <div class="subtitle">BARCODE • SALES • INVENTORY</div>
+
+  <section class="card">
+    <button id="scanBtn" class="primary" type="button">SCAN BARCODE WITH CAMERA</button>
+    <div id="reader" class="hidden"></div>
+    <div class="muted" style="margin-top:10px">Tap Scan to start the rear camera. Camera access requires HTTPS and browser permission.</div>
+    <label for="barcode">Or enter barcode manually</label>
+    <div class="row">
+      <input id="barcode" autocomplete="off" placeholder="Barcode number">
+      <button id="findBtn" class="secondary" type="button">Find</button>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite">Ready. Scan a barcode or enter it manually.</div>
+  </section>
+
+  <section id="productCard" class="card hidden">
+    <span class="pill">PRODUCT FOUND</span>
+    <div id="productName" class="product-name"></div>
+    <div id="productMeta" class="product-meta"></div>
+
+    <label for="type">Transaction</label>
+    <select id="type">
+      <option value="SALE">SALE — deduct stock</option>
+      <option value="RESTOCK">RESTOCK — add stock</option>
+      <option value="RETURN">RETURN — add stock</option>
+      <option value="ADJUSTMENT">SET STOCK — exact quantity</option>
+    </select>
+
+    <label for="qty">Quantity (default 1)</label>
+    <div class="qtyrow">
+      <button id="minusBtn" class="secondary" type="button">−</button>
+      <input id="qty" type="number" min="1" step="1" value="1" inputmode="numeric">
+      <button id="plusBtn" class="secondary" type="button">+</button>
+    </div>
+
+    <label for="price">Unit selling price (₹)</label>
+    <input id="price" type="number" min="0" step="0.01" inputmode="decimal">
+    <label for="notes">Notes (optional)</label>
+    <input id="notes" placeholder="Optional note">
+    <p class="muted">Timestamp is recorded automatically in India time. GPS is requested when you confirm. If location is denied, the transaction can still be saved without GPS.</p>
+    <button id="saveBtn" class="primary" type="button">CONFIRM TRANSACTION</button>
+  </section>
+</div>
+
 <script>
-const API_URL='https://script.google.com/macros/s/AKfycbwFhK1HaEYDtbqGrYo7PsoUqGIF3jV_Dbn-I7tEeg-wW30PtlaIbGCouB5ky_1dlWs_/exec';let product=null,scanner=null;
-const el=id=>document.getElementById(id),status=t=>el('status').textContent=t;
-function api(params){return new Promise((resolve,reject)=>{const cb='liqdcb'+Date.now()+Math.floor(Math.random()*1000);const s=document.createElement('script');params.callback=cb;window[cb]=d=>{delete window[cb];s.remove();d&&d.ok?resolve(d):reject(new Error(d.error||'Request failed'))};s.onerror=()=>{delete window[cb];s.remove();reject(new Error('Could not reach Google Sheets API. Check API URL and deployment access.'))};s.src=API_URL+'?'+new URLSearchParams(params).toString();document.body.appendChild(s)})}
-async function lookup(){let b=el('barcode').value.trim();if(!b)return status('Enter or scan a barcode.');status('Looking up…');try{let r=await api({action:'lookup',barcode:b});product=r.product;el('name').textContent=product.name+' — '+product.variant;el('meta').textContent='SKU: '+product.sku+' • Stock: '+product.stock;el('price').value=product.price;el('qty').value=1;el('type').value='SALE';el('productCard').classList.remove('hidden');status('Product ready. Quantity defaults to 1.')}catch(e){el('productCard').classList.add('hidden');status(e.message)}}
-function step(n){el('qty').value=Math.max(1,parseInt(el('qty').value||1)+n)}
-async function startScan(){if(!window.isSecureContext){status('Camera requires an HTTPS website.');return}el('reader').classList.remove('hidden');if(scanner)return;try{scanner=new Html5Qrcode('reader');await scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:260,height:130}},async text=>{el('barcode').value=text;await scanner.stop();scanner=null;el('reader').classList.add('hidden');lookup()},()=>{})}catch(e){status('Camera error: '+e+'\\nAllow camera permission for this website in Chrome site settings.');scanner=null}}
-function location(){return new Promise(resolve=>{if(!navigator.geolocation)return resolve({});navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude}),()=>resolve({}),{enableHighAccuracy:true,timeout:10000,maximumAge:60000})})}
-async function save(){if(!product)return status('Find a product first.');let q=Number(el('qty').value);if(!Number.isInteger(q)||q<1)return status('Quantity must be at least 1.');status('Requesting location and saving…');let loc=await location();try{let r=await api({action:'save',barcode:product.barcode,type:el('type').value,qty:q,price:el('price').value,lat:loc.lat??'',lng:loc.lng??'',device:navigator.userAgent,notes:el('notes').value});el('meta').textContent='SKU: '+product.sku+' • Stock: '+r.stock;el('qty').value=1;status('Saved • '+r.timestamp+' IST\\nStock now: '+r.stock+'\\nAmount: ₹'+r.amount+(loc.lat?'\\nGPS captured.':'\\nGPS unavailable; saved without location.'))}catch(e){status('Not saved: '+e.message)}}
-</script></body></html>
+'use strict';
+
+/* IMPORTANT: Paste your deployed Apps Script Web App URL ending in /exec here. */
+const API_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+let currentProduct = null;
+let scanner = null;
+let scannerStarting = false;
+
+const $ = id => document.getElementById(id);
+
+function setStatus(message, kind) {
+  const box = $('status');
+  box.textContent = message;
+  box.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function validateApiUrl() {
+  if (API_URL.indexOf('https://script.google.com/macros/s/') !== 0 || !/\/exec$/.test(API_URL)) {
+    setStatus('Setup needed: paste your deployed Google Apps Script URL ending in /exec into API_URL in this file.', 'error');
+    return false;
+  }
+  return true;
+}
+
+function callApi(params) {
+  return new Promise((resolve, reject) => {
+    if (!validateApiUrl()) {
+      reject(new Error('Apps Script API URL is not configured.'));
+      return;
+    }
+    const callbackName = 'liqdCallback' + Date.now() + Math.floor(Math.random() * 100000);
+    const script = document.createElement('script');
+    let finished = false;
+
+    const cleanup = () => {
+      if (finished) return;
+      finished = true;
+      try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+      script.remove();
+    };
+
+    window[callbackName] = data => {
+      cleanup();
+      if (data && data.ok) resolve(data);
+      else reject(new Error((data && data.error) || 'The server rejected the request.'));
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('Could not connect to Apps Script. Check deployment access and API_URL.'));
+    };
+
+    const query = new URLSearchParams(Object.assign({}, params, {callback: callbackName}));
+    script.src = API_URL + '?' + query.toString();
+    document.body.appendChild(script);
+
+    setTimeout(() => {
+      if (!finished) {
+        cleanup();
+        reject(new Error('Apps Script timed out. Check your internet connection and deployment.'));
+      }
+    }, 20000);
+  });
+}
+
+async function findProduct() {
+  const barcode = $('barcode').value.trim();
+  if (!barcode) {
+    setStatus('Enter or scan a barcode first.', 'error');
+    return;
+  }
+  setStatus('Looking up product…');
+  try {
+    const result = await callApi({action: 'lookup', barcode});
+    currentProduct = result.product;
+    $('productName').textContent = currentProduct.name + ' — ' + currentProduct.variant;
+    $('productMeta').textContent = 'SKU: ' + currentProduct.sku + ' • Current stock: ' + currentProduct.stock;
+    $('price').value = currentProduct.price;
+    $('qty').value = '1';
+    $('type').value = 'SALE';
+    $('notes').value = '';
+    $('productCard').classList.remove('hidden');
+    setStatus('Product ready. Quantity defaults to 1.', 'ok');
+  } catch (error) {
+    currentProduct = null;
+    $('productCard').classList.add('hidden');
+    setStatus(error.message || String(error), 'error');
+  }
+}
+
+async function startCamera() {
+  if (scannerStarting || scanner) return;
+  if (!window.isSecureContext) {
+    setStatus('Camera blocked: open this app using its HTTPS GitHub Pages URL, not a file:// link.', 'error');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus('This browser does not expose camera access. Open the HTTPS app in Chrome or Safari.', 'error');
+    return;
+  }
+  if (typeof Html5Qrcode === 'undefined') {
+    setStatus('Scanner library did not load. Check internet access and reload the page.', 'error');
+    return;
+  }
+
+  scannerStarting = true;
+  $('scanBtn').disabled = true;
+  $('reader').classList.remove('hidden');
+  setStatus('Starting camera… If prompted, choose Allow.');
+
+  try {
+    scanner = new Html5Qrcode('reader', {verbose: false});
+    const cameras = await Html5Qrcode.getCameras();
+    if (!cameras || cameras.length === 0) throw new Error('No camera detected on this device.');
+    const rearCamera = cameras.find(camera => /back|rear|environment/i.test(camera.label)) || cameras[cameras.length - 1];
+
+    await scanner.start(
+      rearCamera.id,
+      {fps: 10, qrbox: {width: 270, height: 130}, aspectRatio: 1.777},
+      async decodedText => {
+        $('barcode').value = decodedText;
+        await stopCamera();
+        findProduct();
+      },
+      () => {}
+    );
+    setStatus('Camera is active. Hold the barcode inside the scanning frame.', 'ok');
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    await stopCamera();
+    setStatus('Camera could not start: ' + message + '\nCheck Chrome → Site settings → Camera, and Android Settings → Apps → Chrome → Permissions → Camera.', 'error');
+  } finally {
+    scannerStarting = false;
+    $('scanBtn').disabled = false;
+  }
+}
+
+async function stopCamera() {
+  if (scanner) {
+    try {
+      if (scanner.isScanning) await scanner.stop();
+      await scanner.clear();
+    } catch (_) {}
+    scanner = null;
+  }
+  $('reader').classList.add('hidden');
+}
+
+function getGps() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) {
+      resolve({});
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      position => resolve({lat: position.coords.latitude, lng: position.coords.longitude}),
+      () => resolve({}),
+      {enableHighAccuracy: true, timeout: 10000, maximumAge: 60000}
+    );
+  });
+}
+
+async function saveTransaction() {
+  if (!currentProduct) {
+    setStatus('Find a product before saving.', 'error');
+    return;
+  }
+  const qty = Number($('qty').value);
+  if (!Number.isInteger(qty) || qty < 1) {
+    setStatus('Quantity must be a whole number of at least 1.', 'error');
+    return;
+  }
+
+  $('saveBtn').disabled = true;
+  setStatus('Requesting GPS permission and saving transaction…');
+  try {
+    const gps = await getGps();
+    const result = await callApi({
+      action: 'save',
+      barcode: currentProduct.barcode,
+      type: $('type').value,
+      qty: String(qty),
+      price: $('price').value,
+      lat: gps.lat == null ? '' : String(gps.lat),
+      lng: gps.lng == null ? '' : String(gps.lng),
+      device: navigator.userAgent,
+      notes: $('notes').value
+    });
+    $('productMeta').textContent = 'SKU: ' + currentProduct.sku + ' • Current stock: ' + result.stock;
+    $('qty').value = '1';
+    setStatus(
+      'Saved successfully • ' + result.timestamp + ' IST\nStock now: ' + result.stock +
+      '\nAmount: ₹' + result.amount +
+      (gps.lat == null ? '\nGPS unavailable; transaction saved without location.' : '\nGPS location recorded.'),
+      'ok'
+    );
+  } catch (error) {
+    setStatus('Transaction not saved: ' + (error.message || String(error)), 'error');
+  } finally {
+    $('saveBtn').disabled = false;
+  }
+}
+
+$('scanBtn').addEventListener('click', startCamera);
+$('findBtn').addEventListener('click', findProduct);
+$('barcode').addEventListener('keydown', event => { if (event.key === 'Enter') findProduct(); });
+$('minusBtn').addEventListener('click', () => { $('qty').value = Math.max(1, Number($('qty').value || 1) - 1); });
+$('plusBtn').addEventListener('click', () => { $('qty').value = Math.max(1, Number($('qty').value || 1) + 1); });
+$('saveBtn').addEventListener('click', saveTransaction);
+</script>
+</body>
+</html>
